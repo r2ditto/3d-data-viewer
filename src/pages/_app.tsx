@@ -10,8 +10,8 @@ const geist = Geist({
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
-    <div className={`${geist.variable} font-sans`}>
+    <main className={`${geist.variable} font-sans`}>
       <Component {...pageProps} />
-    </div>
+    </main>
   );
 }

@@ -74,7 +74,6 @@ export default function Home() {
         <div className="mt-8 border p-8 rounded-xl">
           {activeTab === Tab.THREE_D && (
             <div>
-              <h2 className="text-2xl font-bold mb-4">3D Point Cloud Viewer</h2>
               <div className="w-full h-[600px]">
                 {points && <PointCloudViewer points={points} />}
               </div>

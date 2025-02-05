@@ -1,11 +1,15 @@
 import { useMemo } from "react";
 import { BufferGeometry, BufferAttribute, Color } from "three";
 
-interface PointCloudProps {
+interface PointCloudViewerProps {
   points: Float32Array;
+  pointSize?: number;
 }
 
-export function PointCloud({ points }: PointCloudProps) {
+export function PointCloudViewer({
+  points,
+  pointSize = 0.02,
+}: PointCloudViewerProps) {
   const [positions, colors] = useMemo<[Float32Array, Float32Array]>(() => {
     const colors = new Float32Array(
       Array.from({ length: points.length / 3 }, () => [
@@ -29,7 +33,7 @@ export function PointCloud({ points }: PointCloudProps) {
       <pointsMaterial
         attach="material"
         vertexColors
-        size={0.02}
+        size={pointSize}
         sizeAttenuation
       />
     </points>

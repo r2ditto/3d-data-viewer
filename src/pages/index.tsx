@@ -1,11 +1,8 @@
 import { useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
 import { load } from "@loaders.gl/core";
 import { PCDLoader } from "@loaders.gl/pcd";
 
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PointCloudViewer } from "@/components/point-cloud-viewer";
 
@@ -17,7 +14,6 @@ enum Tab {
 export default function Home() {
   const [activeTab, setActiveTab] = useState(Tab.THREE_D);
   const [points, setPoints] = useState<Float32Array | null>(null);
-  const [pointSize, setPointSize] = useState(0.02);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = async (
@@ -43,10 +39,6 @@ export default function Home() {
 
   const handleUploadClick = () => fileInputRef.current?.click();
 
-  const handlePointSizeChange = (values: number[]) => {
-    setPointSize(values[0]);
-  };
-
   return (
     <>
       {/* // Header */}
@@ -67,31 +59,15 @@ export default function Home() {
             </TabsList>
           </Tabs>
 
-          <div className="flex items-center gap-4">
-            <div className="flex flex-col gap-2">
-              <label htmlFor="point-size" className="text-sm font-medium">
-                Point Size: {pointSize.toFixed(3)}
-              </label>
-              <Slider
-                id="point-size"
-                min={0.001}
-                max={0.1}
-                step={0.001}
-                value={[pointSize]}
-                onValueChange={handlePointSizeChange}
-                className="w-[200px]"
-              />
-            </div>
-            <div>
-              <input
-                type="file"
-                accept=".pcd"
-                ref={fileInputRef}
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <Button onClick={handleUploadClick}>Upload PCD File</Button>
-            </div>
+          <div>
+            <input
+              type="file"
+              accept=".pcd"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Button onClick={handleUploadClick}>Upload PCD File</Button>
           </div>
         </div>
 
@@ -100,20 +76,7 @@ export default function Home() {
             <div>
               <h2 className="text-2xl font-bold mb-4">3D Point Cloud Viewer</h2>
               <div className="w-full h-[600px]">
-                <Canvas
-                  camera={{
-                    position: [5, 5, 5],
-                    fov: 75,
-                    near: 0.1,
-                    far: 1000,
-                  }}
-                  style={{ background: "#000000" }}
-                >
-                  {points && (
-                    <PointCloudViewer points={points} pointSize={pointSize} />
-                  )}
-                  <OrbitControls />
-                </Canvas>
+                {points && <PointCloudViewer points={points} />}
               </div>
             </div>
           )}

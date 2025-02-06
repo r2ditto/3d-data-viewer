@@ -1,24 +1,15 @@
-import { useRef } from "react";
+import { memo } from "react";
 import { Button } from "@/components/ui/button";
+import { useViewer } from "@/contexts/viewer-context";
 
-interface LogEntry {
-  time: string;
-  message: string;
-}
-
-interface SystemLogProps {
-  logs: LogEntry[];
-  onClear: () => void;
-}
-
-export function SystemLog({ logs, onClear }: SystemLogProps) {
-  const logsEndRef = useRef<HTMLDivElement>(null);
+export const SystemLog = memo(function SystemLog() {
+  const { logs, clearLogs } = useViewer();
 
   return (
     <div className="mt-8 border p-4 rounded-xl">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-medium">System Log</h2>
-        <Button variant="outline" size="sm" onClick={onClear}>
+        <Button variant="outline" size="sm" onClick={clearLogs}>
           Clear Log
         </Button>
       </div>
@@ -35,8 +26,7 @@ export function SystemLog({ logs, onClear }: SystemLogProps) {
             </div>
           ))
         )}
-        <div ref={logsEndRef} />
       </div>
     </div>
   );
-}
+});

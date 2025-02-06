@@ -132,6 +132,7 @@ function PointCloud({
     });
   }, [pointSize]);
 
+  // @ts-ignore Three.js elements
   return (
     <points>
       <primitive object={geometry} attach="geometry" />

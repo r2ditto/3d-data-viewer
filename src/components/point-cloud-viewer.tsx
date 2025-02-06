@@ -1,69 +1,18 @@
-import { useState, useMemo } from "react";
-import { BufferGeometry, BufferAttribute, Color, Box3, Vector3 } from "three";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { useMemo, useState } from "react";
+import { Canvas, extend } from "@react-three/fiber";
+import { OrbitControls, Grid, Stats } from "@react-three/drei";
+import * as THREE from "three";
+import { Button } from "@/components/ui/button";
+import { PointCloudControls } from "@/components/point-cloud-controls";
 
-import { Slider } from "@/components/ui/slider";
+// Extend Three.js elements for JSX
+extend({ Points: THREE.Points });
 
 interface PointCloudViewerProps {
-  points: Float32Array;
-  fileName: string;
-  fileSize: number;
-}
-
-interface BoundingBox {
-  min: { x: number; y: number; z: number };
-  max: { x: number; y: number; z: number };
-  dimensions: { width: number; height: number; depth: number };
-}
-
-function getColorForHeight(
-  height: number,
-  minHeight: number,
-  maxHeight: number
-): Color {
-  const normalizedHeight = (height - minHeight) / (maxHeight - minHeight);
-
-  if (normalizedHeight < 0.5) {
-    const t = normalizedHeight * 2;
-    return new Color(0, t, 1 - t);
-  } else {
-    const t = (normalizedHeight - 0.5) * 2;
-    return new Color(t, 1 - t, 0);
-  }
-}
-
-function formatFileSize(bytes: number): string {
-  const units = ["B", "KB", "MB", "GB"];
-  let size = bytes;
-  let unitIndex = 0;
-
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex++;
-  }
-
-  return `${size.toFixed(2)} ${units[unitIndex]}`;
-}
-
-function calculateBoundingBox(points: Float32Array): BoundingBox {
-  const box = new Box3();
-  const tempVector = new Vector3();
-
-  for (let i = 0; i < points.length; i += 3) {
-    tempVector.set(points[i], points[i + 1], points[i + 2]);
-    box.expandByPoint(tempVector);
-  }
-
-  return {
-    min: { x: box.min.x, y: box.min.y, z: box.min.z },
-    max: { x: box.max.x, y: box.max.y, z: box.max.z },
-    dimensions: {
-      width: box.max.x - box.min.x,
-      height: box.max.y - box.min.y,
-      depth: box.max.z - box.min.z,
-    },
-  };
+  points?: Float32Array;
+  fileName?: string;
+  fileSize?: number;
+  onUploadClick?: () => void;
 }
 
 function PointCloud({
@@ -73,43 +22,120 @@ function PointCloud({
   points: Float32Array;
   pointSize: number;
 }) {
-  const { geometry } = useMemo(() => {
-    const geometry = new BufferGeometry();
-    let minHeight = Infinity;
-    let maxHeight = -Infinity;
-    for (let i = 1; i < points.length; i += 3) {
-      const height = points[i];
-      minHeight = Math.min(minHeight, height);
-      maxHeight = Math.max(maxHeight, height);
-    }
+  const { positions, colors } = useMemo(() => {
+    // Process and normalize points
+    const validPoints: number[] = [];
+    let minX = Infinity,
+      maxX = -Infinity;
+    let minY = Infinity,
+      maxY = -Infinity;
+    let minZ = Infinity,
+      maxZ = -Infinity;
 
-    const colors = new Float32Array(points.length);
+    // Collect valid points and find bounds
     for (let i = 0; i < points.length; i += 3) {
-      const height = points[i + 1];
-      const color = getColorForHeight(height, minHeight, maxHeight);
-      colors[i] = color.r;
-      colors[i + 1] = color.g;
-      colors[i + 2] = color.b;
+      const x = points[i];
+      const y = points[i + 1];
+      const z = points[i + 2];
+
+      if (
+        isFinite(x) &&
+        isFinite(y) &&
+        isFinite(z) &&
+        !isNaN(x) &&
+        !isNaN(y) &&
+        !isNaN(z)
+      ) {
+        validPoints.push(x, y, z);
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+        minZ = Math.min(minZ, z);
+        maxZ = Math.max(maxZ, z);
+      }
     }
 
-    geometry.setAttribute("position", new BufferAttribute(points, 3));
-    geometry.setAttribute("color", new BufferAttribute(colors, 3));
+    // Calculate center and scale
+    const center = new THREE.Vector3(
+      (minX + maxX) / 2,
+      (minY + maxY) / 2,
+      (minZ + maxZ) / 2
+    );
 
-    return {
-      geometry,
-      heightRange: { min: minHeight, max: maxHeight },
-    };
+    const size = new THREE.Vector3(maxX - minX, maxY - minY, maxZ - minZ);
+
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const scale = maxDim > 0 ? 2 / maxDim : 1;
+
+    // Create normalized points and calculate colors
+    const positions = new Float32Array(validPoints.length);
+    const colors = new Float32Array(validPoints.length);
+
+    for (let i = 0; i < validPoints.length; i += 3) {
+      // Normalize positions
+      positions[i] = (validPoints[i] - center.x) * scale;
+      positions[i + 1] = (validPoints[i + 1] - center.y) * scale;
+      positions[i + 2] = (validPoints[i + 2] - center.z) * scale;
+
+      // Calculate color based on normalized height (y-coordinate)
+      const heightRatio = (positions[i + 1] + 1) / 2; // Map from [-1, 1] to [0, 1]
+
+      // Enhanced color contrast with vibrant colors
+      if (heightRatio < 0.25) {
+        // Lowest quarter: Electric blue to cyan
+        const t = heightRatio * 4;
+        colors[i] = 0; // Red
+        colors[i + 1] = t; // Green
+        colors[i + 2] = 1.0; // Blue
+      } else if (heightRatio < 0.5) {
+        // Lower middle: Cyan to bright green
+        const t = (heightRatio - 0.25) * 4;
+        colors[i] = 0; // Red
+        colors[i + 1] = 1.0; // Green
+        colors[i + 2] = 1.0 - t; // Blue
+      } else if (heightRatio < 0.75) {
+        // Upper middle: Green to yellow
+        const t = (heightRatio - 0.5) * 4;
+        colors[i] = t; // Red
+        colors[i + 1] = 1.0; // Green
+        colors[i + 2] = 0; // Blue
+      } else {
+        // Highest quarter: Yellow to magenta
+        const t = (heightRatio - 0.75) * 4;
+        colors[i] = 1.0; // Red
+        colors[i + 1] = 1.0 - t; // Green
+        colors[i + 2] = t; // Blue
+      }
+    }
+
+    return { positions, colors };
   }, [points]);
+
+  const geometry = useMemo(() => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(positions, 3)
+    );
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    return geometry;
+  }, [positions, colors]);
+
+  const material = useMemo(() => {
+    return new THREE.PointsMaterial({
+      size: pointSize,
+      sizeAttenuation: true,
+      vertexColors: true,
+      transparent: false,
+      depthWrite: true,
+    });
+  }, [pointSize]);
 
   return (
     <points>
-      <primitive object={geometry} />
-      <pointsMaterial
-        attach="material"
-        vertexColors
-        size={pointSize}
-        sizeAttenuation
-      />
+      <primitive object={geometry} attach="geometry" />
+      <primitive object={material} attach="material" />
     </points>
   );
 }
@@ -118,98 +144,74 @@ export function PointCloudViewer({
   points,
   fileName,
   fileSize,
+  onUploadClick,
 }: PointCloudViewerProps) {
-  const [pointSize, setPointSize] = useState(0.02);
-  const boundingBox = useMemo(() => calculateBoundingBox(points), [points]);
-  const numPoints = points.length / 3;
+  const [pointSize, setPointSize] = useState(0.015);
 
-  const handlePointSizeChange = (values: number[]) => {
-    setPointSize(values[0]);
-  };
+  if (!points) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-black">
+        <div className="text-center space-y-4">
+          <p className="text-lg text-gray-400">No point cloud data loaded</p>
+          <Button
+            onClick={onUploadClick}
+            className="bg-primary hover:bg-primary/90"
+          >
+            Upload PCD File
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="relative w-full h-full">
-      {/* File Statistics Panel */}
-      <div className="absolute top-4 left-4 z-10 bg-background/80 backdrop-blur-sm p-4 rounded-lg shadow-lg w-64">
-        <div className="flex flex-col gap-3">
-          <div>
-            <h3 className="font-medium mb-2">File Information</h3>
-            <div className="space-y-1 text-sm">
-              <p>
-                <span className="text-muted-foreground">Name:</span> {fileName}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Size:</span>{" "}
-                {formatFileSize(fileSize)}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Points:</span>{" "}
-                {numPoints.toLocaleString()}
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="font-medium mb-2">Bounding Box</h3>
-            <div className="space-y-1 text-sm">
-              <p>
-                <span className="text-muted-foreground">Width:</span>{" "}
-                {boundingBox.dimensions.width.toFixed(2)}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Height:</span>{" "}
-                {boundingBox.dimensions.height.toFixed(2)}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Depth:</span>{" "}
-                {boundingBox.dimensions.depth.toFixed(2)}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Point Size Control */}
-      <div className="absolute top-4 right-4 z-10 bg-background/80 backdrop-blur-sm p-4 rounded-lg shadow-lg">
-        <div className="flex flex-col gap-2">
-          <label htmlFor="point-size" className="text-sm font-medium">
-            Point Size: {pointSize.toFixed(3)}
-          </label>
-          <Slider
-            min={0.001}
-            max={0.1}
-            step={0.001}
-            value={[pointSize]}
-            onValueChange={handlePointSizeChange}
-            className="w-[200px]"
-          />
-        </div>
-      </div>
-
-      {/* Color scale legend */}
-      <div className="absolute bottom-4 right-4 z-10 bg-background/80 backdrop-blur-sm p-4 rounded-lg shadow-lg">
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium">Height</span>
-          <div className="w-32 h-4 bg-gradient-to-r from-blue-500 via-green-500 to-red-500 rounded" />
-          <div className="flex justify-between text-xs">
-            <span>Low</span>
-            <span>High</span>
-          </div>
-        </div>
-      </div>
-
+    <div className="w-full h-full relative bg-black">
       <Canvas
         camera={{
-          position: [5, 5, 5],
-          fov: 75,
+          position: [2, 2, 2],
+          fov: 50,
           near: 0.1,
           far: 1000,
         }}
-        style={{ background: "#000000" }}
+        gl={{ antialias: true }}
+        dpr={window.devicePixelRatio}
+        onCreated={({ gl }) => {
+          gl.setClearColor(new THREE.Color(0x000000));
+        }}
       >
         <PointCloud points={points} pointSize={pointSize} />
-        <OrbitControls />
+
+        <Grid
+          position={[0, -1, 0]}
+          args={[10, 10]}
+          cellSize={0.5}
+          cellThickness={0.5}
+          cellColor="#333333"
+          sectionSize={1}
+          fadeDistance={30}
+          fadeStrength={1}
+        />
+
+        <OrbitControls
+          makeDefault
+          minDistance={0.5}
+          maxDistance={10}
+          enableDamping={true}
+          dampingFactor={0.05}
+          screenSpacePanning={false}
+        />
+
+        <Stats />
       </Canvas>
+
+      <PointCloudControls
+        fileName={fileName}
+        fileSize={fileSize}
+        pointCount={points.length / 3}
+        pointSize={pointSize}
+        onPointSizeChange={setPointSize}
+        onUploadClick={onUploadClick || (() => {})}
+      />
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PointCloudViewer } from "@/components/point-cloud-viewer";
 import { GISViewer } from "@/components/gis-viewer";
+
 import type { GeoJSONData } from "@/types/geojson";
 
 enum Tab {
@@ -13,9 +14,15 @@ enum Tab {
   GIS = "GIS",
 }
 
+interface FileData {
+  points: Float32Array;
+  name: string;
+  size: number;
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState(Tab.THREE_D);
-  const [points, setPoints] = useState<Float32Array | null>(null);
+  const [fileData, setFileData] = useState<FileData | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = async (
@@ -40,22 +47,27 @@ export default function Home() {
     }
 
     try {
+      let points: Float32Array;
+
       if (isPCD) {
         const data = await load(file, PCDLoader);
-        const positions = new Float32Array(data.attributes.POSITION.value);
-        setPoints(positions);
-      } else if (isJSON) {
+        points = new Float32Array(data.attributes.POSITION.value);
+      } else {
         const text = await file.text();
         const json = JSON.parse(text) as GeoJSONData;
-
-        const positions = new Float32Array(
+        points = new Float32Array(
           json.features.flatMap((feature) => {
             const coords = feature.geometry.coordinates;
             return [coords[0], coords[1], feature.properties?.height || 0];
           })
         );
-        setPoints(positions);
       }
+
+      setFileData({
+        points,
+        name: file.name,
+        size: file.size,
+      });
     } catch (error) {
       console.error("Error parsing file:", error);
       alert(
@@ -114,13 +126,19 @@ export default function Home() {
           {activeTab === Tab.THREE_D && (
             <div>
               <div className="w-full h-[600px]">
-                {points && <PointCloudViewer points={points} />}
+                {fileData && (
+                  <PointCloudViewer
+                    points={fileData.points}
+                    fileName={fileData.name}
+                    fileSize={fileData.size}
+                  />
+                )}
               </div>
             </div>
           )}
           {activeTab === Tab.GIS && (
             <div className="w-full h-[600px]">
-              {points && <GISViewer points={points} />}
+              {fileData && <GISViewer points={fileData.points} />}
             </div>
           )}
         </div>

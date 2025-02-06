@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Grid, Stats } from "@react-three/drei";
 import * as THREE from "three";
@@ -20,6 +20,34 @@ export function PointCloudViewer({
   onUploadClick,
 }: PointCloudViewerProps) {
   const [pointSize, setPointSize] = useState(0.015);
+
+  const boundingBox = useMemo(() => {
+    if (!points) return undefined;
+
+    const min: [number, number, number] = [Infinity, Infinity, Infinity];
+    const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+
+    for (let i = 0; i < points.length; i += 3) {
+      const x = points[i];
+      const y = points[i + 1];
+      const z = points[i + 2];
+
+      if (isFinite(x) && !isNaN(x)) {
+        min[0] = Math.min(min[0], x);
+        max[0] = Math.max(max[0], x);
+      }
+      if (isFinite(y) && !isNaN(y)) {
+        min[1] = Math.min(min[1], y);
+        max[1] = Math.max(max[1], y);
+      }
+      if (isFinite(z) && !isNaN(z)) {
+        min[2] = Math.min(min[2], z);
+        max[2] = Math.max(max[2], z);
+      }
+    }
+
+    return { min, max };
+  }, [points]);
 
   if (!points) {
     return (
@@ -82,6 +110,7 @@ export function PointCloudViewer({
         fileSize={fileSize}
         pointCount={points.length / 3}
         pointSize={pointSize}
+        boundingBox={boundingBox}
         onPointSizeChange={setPointSize}
         onUploadClick={onUploadClick || (() => {})}
       />

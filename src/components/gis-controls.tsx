@@ -38,7 +38,7 @@ export function GISControls({
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-green-500" />
+              <div className="w-4 h-0.5 bg-green-500" />
               <span className="text-muted-foreground">Lines</span>
             </div>
             <span className="text-muted-foreground">{featureCounts.lines}</span>

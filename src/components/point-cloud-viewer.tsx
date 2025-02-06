@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Grid, Stats } from "@react-three/drei";
-import * as THREE from "three";
+import { OrbitControls, Grid } from "@react-three/drei";
+import { Color } from "three";
 import { Button } from "@/components/ui/button";
 import { PointCloudControls } from "@/components/point-cloud-controls";
 import { PointCloud } from "@/components/point-cloud";
@@ -77,7 +77,7 @@ export function PointCloudViewer({
         gl={{ antialias: true }}
         dpr={window.devicePixelRatio}
         onCreated={({ gl }) => {
-          gl.setClearColor(new THREE.Color(0x000000));
+          gl.setClearColor(new Color(0x000000));
         }}
       >
         <PointCloud points={points} pointSize={pointSize} />
@@ -101,8 +101,6 @@ export function PointCloudViewer({
           dampingFactor={0.05}
           screenSpacePanning={false}
         />
-
-        <Stats />
       </Canvas>
 
       <PointCloudControls

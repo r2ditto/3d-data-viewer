@@ -1,13 +1,23 @@
+export type GeoJSONGeometry =
+  | {
+      type: "Point";
+      coordinates: [number, number];
+    }
+  | {
+      type: "LineString";
+      coordinates: [number, number][];
+    }
+  | {
+      type: "Polygon";
+      coordinates: [number, number][][];
+    };
+
 export interface GeoJSONFeature {
   type: "Feature";
-  geometry: {
-    type: "Point";
-    coordinates: [number, number];
-  };
+  geometry: GeoJSONGeometry;
   properties: {
     height?: number;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 

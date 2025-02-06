@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { useViewer } from "@/contexts/viewer-context";
+import { cn } from "@/lib/utils";
 
 export const SystemLog = memo(function SystemLog() {
   const { logs, clearLogs } = useViewer();
@@ -17,12 +18,18 @@ export const SystemLog = memo(function SystemLog() {
         {logs.length === 0 ? (
           <p className="text-muted-foreground italic">No actions logged yet.</p>
         ) : (
-          logs.map(({ time, message }, index) => (
+          logs.map(({ time, message, type }, index) => (
             <div key={index} className="flex gap-3">
               <span className="text-muted-foreground whitespace-nowrap">
                 {time}
               </span>
-              <span className="whitespace-pre-wrap">{message}</span>
+              <span
+                className={cn("whitespace-pre-wrap", {
+                  "text-red-500": type === "error",
+                })}
+              >
+                {message}
+              </span>
             </div>
           ))
         )}

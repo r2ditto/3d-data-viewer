@@ -14,76 +14,115 @@ export function useMapbox(geojson?: GeoJSON) {
   const [selectedFeature, setSelectedFeature] = useState<FeatureInfo | null>(
     null
   );
-  const [mapboxgl, setMapboxgl] = useState<typeof import("mapbox-gl")>();
 
-  // Load Mapbox dynamically
   useEffect(() => {
-    import("mapbox-gl").then((module) => {
-      module.default.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
-      setMapboxgl(module);
-    });
-  }, []);
+    if (!mapContainer.current) return;
 
-  // Update popover position when map moves
-  useEffect(() => {
-    if (!map.current || !selectedFeature) return;
-
-    const updatePosition = () => {
-      const point = map.current!.project(selectedFeature.coordinates);
-      setSelectedFeature({
-        ...selectedFeature,
-        pixelCoordinates: { x: point.x, y: point.y },
-      });
-    };
-
-    map.current.on("move", updatePosition);
-    return () => {
-      map.current?.off("move", updatePosition);
-    };
-  }, [selectedFeature]);
-
-  // Initialize map and handle data
-  useEffect(() => {
-    if (!mapContainer.current || !mapboxgl) return;
-
-    async function setupMap() {
-      // Initialize map if it doesn't exist
+    async function initializeMap(mapboxgl: any) {
       if (!map.current) {
-        map.current = new mapboxgl.Map({
-          container: mapContainer.current,
+        map.current = new mapboxgl.default.Map({
+          container: mapContainer.current!,
           style: "mapbox://styles/mapbox/satellite-v9",
           center: [0, 0],
           zoom: 2,
           pitch: 45,
         });
       }
+    }
 
-      // Function to add data to map
+    function removeExistingLayers() {
+      if (!map.current) return;
+
+      ["points", "lines", "polygons"].forEach((layerId) => {
+        if (map.current?.getLayer(layerId)) {
+          map.current.removeLayer(layerId);
+        }
+      });
+
+      if (map.current.getSource("geojson")) {
+        map.current.removeSource("geojson");
+      }
+    }
+
+    function addLayerToMap(layerId: string, layerConfig: any) {
+      map.current?.addLayer({
+        id: layerId,
+        source: "geojson",
+        ...layerConfig,
+      });
+    }
+
+    function setupLayerInteractions(layerId: string) {
+      if (!map.current) return;
+
+      map.current.on("mouseenter", layerId, () => {
+        if (map.current) map.current.getCanvas().style.cursor = "pointer";
+      });
+
+      map.current.on("mouseleave", layerId, () => {
+        if (map.current) map.current.getCanvas().style.cursor = "";
+      });
+
+      map.current.on("click", layerId, (e) => {
+        if (!e.features?.[0]) return;
+        const feature = e.features[0];
+        const coordinates = e.lngLat.toArray() as [number, number];
+        const point = map.current!.project(coordinates);
+
+        setSelectedFeature({
+          properties: feature.properties || {},
+          coordinates,
+          pixelCoordinates: { x: point.x, y: point.y },
+        });
+      });
+    }
+
+    function fitMapToBounds(mapboxgl: any) {
+      if (!map.current || !geojson || !("features" in geojson)) return;
+
+      const bounds = new mapboxgl.default.LngLatBounds();
+
+      geojson.features.forEach((feature) => {
+        const addCoordToBounds = (coord: [number, number]) =>
+          bounds.extend(coord);
+
+        switch (feature.geometry.type) {
+          case "Point":
+            addCoordToBounds(feature.geometry.coordinates as [number, number]);
+            break;
+          case "LineString":
+            feature.geometry.coordinates.forEach(addCoordToBounds);
+            break;
+          case "Polygon":
+            feature.geometry.coordinates[0].forEach(addCoordToBounds);
+            break;
+        }
+      });
+
+      if (!bounds.isEmpty()) {
+        map.current.fitBounds(bounds, { padding: 50 });
+      }
+    }
+
+    async function setupMap() {
+      const mapboxgl = await import("mapbox-gl");
+      mapboxgl.default.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
+
+      await initializeMap(mapboxgl);
+
       const addData = () => {
         if (!map.current || !geojson) return;
 
-        // Remove existing layers and source
-        ["points", "lines", "polygons"].forEach((layerId) => {
-          if (map.current?.getLayer(layerId)) {
-            map.current.removeLayer(layerId);
-          }
-        });
+        removeExistingLayers();
 
-        if (map.current.getSource("geojson")) {
-          map.current.removeSource("geojson");
-        }
-
-        // Add new source and layers
         map.current.addSource("geojson", {
           type: "geojson",
           data: geojson,
         });
 
-        // Add point layer
-        map.current.addLayer({
-          id: "points",
+        // Add layers with their configurations
+        addLayerToMap("points", {
           type: "circle",
-          source: "geojson",
           filter: ["==", ["geometry-type"], "Point"],
           paint: {
             "circle-radius": 6,
@@ -92,11 +131,8 @@ export function useMapbox(geojson?: GeoJSON) {
           },
         });
 
-        // Add line layer
-        map.current.addLayer({
-          id: "lines",
+        addLayerToMap("lines", {
           type: "line",
-          source: "geojson",
           filter: ["==", ["geometry-type"], "LineString"],
           paint: {
             "line-color": "#00ff00",
@@ -104,11 +140,8 @@ export function useMapbox(geojson?: GeoJSON) {
           },
         });
 
-        // Add polygon layer
-        map.current.addLayer({
-          id: "polygons",
+        addLayerToMap("polygons", {
           type: "fill",
-          source: "geojson",
           filter: ["==", ["geometry-type"], "Polygon"],
           paint: {
             "fill-color": "#0000ff",
@@ -117,85 +150,36 @@ export function useMapbox(geojson?: GeoJSON) {
           },
         });
 
-        // Add click and hover effects
-        ["points", "lines", "polygons"].forEach((layerId) => {
-          // Hover effects
-          map.current?.on("mouseenter", layerId, () => {
-            if (map.current) map.current.getCanvas().style.cursor = "pointer";
-          });
+        ["points", "lines", "polygons"].forEach(setupLayerInteractions);
 
-          map.current?.on("mouseleave", layerId, () => {
-            if (map.current) map.current.getCanvas().style.cursor = "";
-          });
-
-          // Click handler
-          map.current?.on("click", layerId, (e) => {
-            if (!e.features?.[0]) return;
-
-            const feature = e.features[0];
-            const coordinates = e.lngLat.toArray() as [number, number];
-            const point = map.current!.project(coordinates);
-
-            setSelectedFeature({
-              properties: feature.properties || {},
-              coordinates,
-              pixelCoordinates: { x: point.x, y: point.y },
-            });
-          });
-        });
-
-        // Close popover when clicking elsewhere on the map
         map.current.on("click", (e) => {
           const features = map.current?.queryRenderedFeatures(e.point, {
             layers: ["points", "lines", "polygons"],
           });
-
           if (!features?.length) {
             setSelectedFeature(null);
           }
         });
 
-        // Fit bounds to data
-        if ("features" in geojson && geojson.features.length > 0) {
-          const bounds = new mapboxgl.LngLatBounds();
-          geojson.features.forEach((feature) => {
-            if (feature.geometry.type === "Point") {
-              bounds.extend(feature.geometry.coordinates as [number, number]);
-            } else if (feature.geometry.type === "LineString") {
-              feature.geometry.coordinates.forEach((coord) => {
-                bounds.extend(coord as [number, number]);
-              });
-            } else if (feature.geometry.type === "Polygon") {
-              feature.geometry.coordinates[0].forEach((coord) => {
-                bounds.extend(coord as [number, number]);
-              });
-            }
-          });
-
-          if (!bounds.isEmpty()) {
-            map.current.fitBounds(bounds, { padding: 50 });
-          }
-        }
+        fitMapToBounds(mapboxgl);
       };
 
-      // Add data when style is loaded
-      if (map.current.isStyleLoaded()) {
+      if (map.current?.isStyleLoaded()) {
         addData();
-      } else {
+      } else if (map.current) {
         map.current.once("style.load", addData);
       }
     }
 
     setupMap();
 
-    // Cleanup
     return () => {
       if (map.current) {
         map.current.remove();
         map.current = null;
       }
     };
-  }, [geojson, mapboxgl]);
+  }, [geojson]);
 
   return {
     mapContainer,

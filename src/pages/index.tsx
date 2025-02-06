@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PointCloudViewer } from "@/components/point-cloud-viewer";
 import { GISViewer } from "@/components/gis-viewer";
-
 import type { GeoJSONData } from "@/types/geojson";
 
 enum Tab {
@@ -14,15 +13,29 @@ enum Tab {
   GIS = "GIS",
 }
 
-interface FileData {
+interface PCDData {
   points: Float32Array;
   name: string;
   size: number;
 }
 
+interface GISData {
+  geojson: GeoJSONData;
+  name: string;
+  size: number;
+}
+
+interface FileState {
+  pcd: PCDData | null;
+  gis: GISData | null;
+}
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState(Tab.THREE_D);
-  const [fileData, setFileData] = useState<FileData | null>(null);
+  const [fileState, setFileState] = useState<FileState>({
+    pcd: null,
+    gis: null,
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = async (
@@ -47,31 +60,36 @@ export default function Home() {
     }
 
     try {
-      let points: Float32Array;
-
       if (isPCD) {
         const data = await load(file, PCDLoader);
-        points = new Float32Array(data.attributes.POSITION.value);
+        setFileState((prev) => ({
+          ...prev,
+          pcd: {
+            points: new Float32Array(data.attributes.POSITION.value),
+            name: file.name,
+            size: file.size,
+          },
+        }));
       } else {
         const text = await file.text();
-        const json = JSON.parse(text) as GeoJSONData;
-        points = new Float32Array(
-          json.features.flatMap((feature) => {
-            const coords = feature.geometry.coordinates;
-            return [coords[0], coords[1], feature.properties?.height || 0];
-          })
-        );
+        const geojson = JSON.parse(text) as GeoJSONData;
+        setFileState((prev) => ({
+          ...prev,
+          gis: {
+            geojson,
+            name: file.name,
+            size: file.size,
+          },
+        }));
       }
-
-      setFileData({
-        points,
-        name: file.name,
-        size: file.size,
-      });
     } catch (error) {
       console.error("Error parsing file:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred";
       alert(
-        `Error parsing ${activeTab === Tab.THREE_D ? "PCD" : "GeoJSON"} file`
+        `Error parsing ${
+          activeTab === Tab.THREE_D ? "PCD" : "GeoJSON"
+        } file: ${errorMessage}`
       );
     }
   };
@@ -83,9 +101,15 @@ export default function Home() {
   };
 
   const getUploadButtonLabel = () => {
-    return activeTab === Tab.THREE_D
-      ? "Upload PCD File"
-      : "Upload GeoJSON File";
+    if (activeTab === Tab.THREE_D) {
+      return fileState.pcd
+        ? `Replace ${fileState.pcd.name}`
+        : "Upload PCD File";
+    } else {
+      return fileState.gis
+        ? `Replace ${fileState.gis.name}`
+        : "Upload GeoJSON File";
+    }
   };
 
   return (
@@ -126,11 +150,11 @@ export default function Home() {
           {activeTab === Tab.THREE_D && (
             <div>
               <div className="w-full h-[600px]">
-                {fileData && (
+                {fileState.pcd && (
                   <PointCloudViewer
-                    points={fileData.points}
-                    fileName={fileData.name}
-                    fileSize={fileData.size}
+                    points={fileState.pcd.points}
+                    fileName={fileState.pcd.name}
+                    fileSize={fileState.pcd.size}
                   />
                 )}
               </div>
@@ -138,7 +162,7 @@ export default function Home() {
           )}
           {activeTab === Tab.GIS && (
             <div className="w-full h-[600px]">
-              {fileData && <GISViewer points={fileData.points} />}
+              {fileState.gis && <GISViewer geojson={fileState.gis.geojson} />}
             </div>
           )}
         </div>

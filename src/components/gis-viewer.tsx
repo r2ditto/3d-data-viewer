@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
+import type { GeoJSON, Feature, Position } from "geojson";
 
+import "mapbox-gl/dist/mapbox-gl.css";
 interface GISViewerProps {
-  points: Float32Array;
+  geojson: GeoJSON;
 }
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
 
-export function GISViewer({ points }: GISViewerProps) {
+export function GISViewer({ geojson }: GISViewerProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -37,63 +38,82 @@ export function GISViewer({ points }: GISViewerProps) {
   }, []);
 
   useEffect(() => {
-    if (!map.current || !mapLoaded || !points.length) return;
+    if (!map.current || !mapLoaded) return;
 
-    const features = [];
-    for (let i = 0; i < points.length; i += 3) {
-      features.push({
-        type: "Feature",
-        geometry: {
-          type: "Point",
-          coordinates: [points[i], points[i + 1]],
-        },
-        properties: {
-          height: points[i + 2],
-        },
-      });
+    // Remove existing layers and sources
+    ["points", "lines", "polygons"].forEach((layerId) => {
+      if (map.current?.getLayer(layerId)) {
+        map.current.removeLayer(layerId);
+      }
+    });
+    if (map.current.getSource("geojson")) {
+      map.current.removeSource("geojson");
     }
 
-    if (map.current.getLayer("points")) {
-      map.current.removeLayer("points");
-    }
-    if (map.current.getSource("points")) {
-      map.current.removeSource("points");
-    }
-
-    map.current.addSource("points", {
+    // Add new source
+    map.current.addSource("geojson", {
       type: "geojson",
-      data: {
-        type: "FeatureCollection",
-        features,
-      },
+      data: geojson,
     });
 
+    // Add point layer
     map.current.addLayer({
       id: "points",
       type: "circle",
-      source: "points",
+      source: "geojson",
+      filter: ["==", ["geometry-type"], "Point"],
       paint: {
-        "circle-radius": 4,
-        "circle-color": [
-          "interpolate",
-          ["linear"],
-          ["get", "height"],
-          ["min", ["get", "height"]],
-          "#0000ff",
-          ["max", ["get", "height"]],
-          "#ff0000",
-        ],
+        "circle-radius": 6,
+        "circle-color": "#ff0000",
         "circle-opacity": 0.8,
       },
     });
 
-    const coordinates = features.map((f) => f.geometry.coordinates);
-    const bounds = coordinates.reduce(
-      (bounds, coord) => bounds.extend(coord as [number, number]),
-      new mapboxgl.LngLatBounds(coordinates[0], coordinates[0])
-    );
-    map.current.fitBounds(bounds, { padding: 50 });
-  }, [points, mapLoaded]);
+    // Add line layer
+    map.current.addLayer({
+      id: "lines",
+      type: "line",
+      source: "geojson",
+      filter: ["==", ["geometry-type"], "LineString"],
+      paint: {
+        "line-color": "#00ff00",
+        "line-width": 2,
+      },
+    });
+
+    // Add polygon layer
+    map.current.addLayer({
+      id: "polygons",
+      type: "fill",
+      source: "geojson",
+      filter: ["==", ["geometry-type"], "Polygon"],
+      paint: {
+        "fill-color": "#0000ff",
+        "fill-opacity": 0.4,
+        "fill-outline-color": "#0000ff",
+      },
+    });
+
+    // Fit bounds to features
+    const bounds = new mapboxgl.LngLatBounds();
+    geojson.features.forEach((feature: Feature) => {
+      if (feature.geometry.type === "Point") {
+        bounds.extend(feature.geometry.coordinates as [number, number]);
+      } else if (feature.geometry.type === "LineString") {
+        feature.geometry.coordinates.forEach((coord: Position) => {
+          bounds.extend(coord as [number, number]);
+        });
+      } else if (feature.geometry.type === "Polygon") {
+        feature.geometry.coordinates[0].forEach((coord: Position) => {
+          bounds.extend(coord as [number, number]);
+        });
+      }
+    });
+
+    if (!bounds.isEmpty()) {
+      map.current.fitBounds(bounds, { padding: 50 });
+    }
+  }, [geojson, mapLoaded]);
 
   return (
     <div className="relative w-full h-full">
@@ -102,11 +122,20 @@ export function GISViewer({ points }: GISViewerProps) {
       {/* Legend */}
       <div className="absolute bottom-4 right-4 z-10 bg-background/80 backdrop-blur-sm p-4 rounded-lg shadow-lg">
         <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium">Height</span>
-          <div className="w-32 h-4 bg-gradient-to-r from-blue-500 to-red-500 rounded" />
-          <div className="flex justify-between text-xs">
-            <span>Low</span>
-            <span>High</span>
+          <span className="text-sm font-medium">Features</span>
+          <div className="space-y-1 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-red-500" />
+              <span>Points</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-green-500" />
+              <span>Lines</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-blue-500 bg-opacity-40" />
+              <span>Polygons</span>
+            </div>
           </div>
         </div>
       </div>

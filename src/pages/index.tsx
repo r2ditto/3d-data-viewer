@@ -5,6 +5,8 @@ import { PCDLoader } from "@loaders.gl/pcd";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PointCloudViewer } from "@/components/point-cloud-viewer";
+import { GISViewer } from "@/components/gis-viewer";
+import type { GeoJSONData } from "@/types/geojson";
 
 enum Tab {
   THREE_D = "3D",
@@ -22,22 +24,57 @@ export default function Home() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.toLowerCase().endsWith(".pcd")) {
+    const isPCD = file.name.toLowerCase().endsWith(".pcd");
+    const isJSON =
+      file.name.toLowerCase().endsWith(".json") ||
+      file.name.toLowerCase().endsWith(".geojson");
+
+    if (activeTab === Tab.THREE_D && !isPCD) {
       alert("Please upload a PCD file");
       return;
     }
 
+    if (activeTab === Tab.GIS && !isJSON) {
+      alert("Please upload a JSON or GeoJSON file");
+      return;
+    }
+
     try {
-      const data = await load(file, PCDLoader);
-      const positions = new Float32Array(data.attributes.POSITION.value);
-      setPoints(positions);
+      if (isPCD) {
+        const data = await load(file, PCDLoader);
+        const positions = new Float32Array(data.attributes.POSITION.value);
+        setPoints(positions);
+      } else if (isJSON) {
+        const text = await file.text();
+        const json = JSON.parse(text) as GeoJSONData;
+
+        const positions = new Float32Array(
+          json.features.flatMap((feature) => {
+            const coords = feature.geometry.coordinates;
+            return [coords[0], coords[1], feature.properties?.height || 0];
+          })
+        );
+        setPoints(positions);
+      }
     } catch (error) {
-      console.error("Error parsing PCD file:", error);
-      alert("Error parsing PCD file");
+      console.error("Error parsing file:", error);
+      alert(
+        `Error parsing ${activeTab === Tab.THREE_D ? "PCD" : "GeoJSON"} file`
+      );
     }
   };
 
   const handleUploadClick = () => fileInputRef.current?.click();
+
+  const getAcceptedFileTypes = () => {
+    return activeTab === Tab.THREE_D ? ".pcd" : ".json,.geojson";
+  };
+
+  const getUploadButtonLabel = () => {
+    return activeTab === Tab.THREE_D
+      ? "Upload PCD File"
+      : "Upload GeoJSON File";
+  };
 
   return (
     <>
@@ -62,12 +99,14 @@ export default function Home() {
           <div>
             <input
               type="file"
-              accept=".pcd"
+              accept={getAcceptedFileTypes()}
               ref={fileInputRef}
               onChange={handleFileUpload}
               className="hidden"
             />
-            <Button onClick={handleUploadClick}>Upload PCD File</Button>
+            <Button onClick={handleUploadClick}>
+              {getUploadButtonLabel()}
+            </Button>
           </div>
         </div>
 
@@ -80,9 +119,8 @@ export default function Home() {
             </div>
           )}
           {activeTab === Tab.GIS && (
-            <div>
-              <h2 className="text-2xl font-bold">GIS Content</h2>
-              <p>This is where your GIS component will go</p>
+            <div className="w-full h-[600px]">
+              {points && <GISViewer points={points} />}
             </div>
           )}
         </div>

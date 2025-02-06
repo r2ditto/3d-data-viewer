@@ -3,12 +3,11 @@ import {
   useContext,
   useCallback,
   useState,
-  useRef,
   ReactNode,
 } from "react";
 import type { GeoJSONData } from "@/types/geojson";
 
-enum Tab {
+export enum Tab {
   THREE_D = "3D",
   GIS = "GIS",
 }
@@ -25,14 +24,17 @@ interface GISData {
   size: number;
 }
 
-interface FileState {
+export interface FileState {
   pcd: PCDData | null;
   gis: GISData | null;
 }
 
+export type LogType = "info" | "error";
+
 interface LogEntry {
   time: string;
   message: string;
+  type: LogType;
 }
 
 interface ViewerContextType {
@@ -41,7 +43,7 @@ interface ViewerContextType {
   fileState: FileState;
   setFileState: React.Dispatch<React.SetStateAction<FileState>>;
   logs: LogEntry[];
-  addLog: (message: string) => void;
+  addLog: (message: string, type?: LogType) => void;
   clearLogs: () => void;
 }
 
@@ -54,15 +56,10 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
     gis: null,
   });
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const logsEndRef = useRef<HTMLDivElement>(null);
 
-  const addLog = useCallback((message: string) => {
+  const addLog = useCallback((message: string, type: LogType = "info") => {
     const time = new Date().toLocaleTimeString();
-    setLogs((prev) => [...prev, { time, message }]);
-    // Scroll to bottom of logs
-    setTimeout(() => {
-      logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
+    setLogs((prev) => [...prev, { time, message, type }]);
   }, []);
 
   const clearLogs = useCallback(() => {
@@ -83,7 +80,6 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      <div ref={logsEndRef} />
     </ViewerContext.Provider>
   );
 }
@@ -95,5 +91,3 @@ export function useViewer() {
   }
   return context;
 }
-
-export { Tab };

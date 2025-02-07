@@ -23,7 +23,7 @@ A web application for visualizing 3D point cloud data (PCD) and geographic infor
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/3d-data-viewer.git
+git clone https://github.com/r2ditto/3d-data-viewer.git
 cd 3d-data-viewer
 ```
 

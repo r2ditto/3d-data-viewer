@@ -25,7 +25,7 @@ export function ViewerLayout() {
           className="w-[400px]"
         >
           <TabsList>
-            <TabsTrigger value={Tab.THREE_D}>3D Viewer</TabsTrigger>
+            <TabsTrigger value={Tab.THREE_D}>PCD</TabsTrigger>
             <TabsTrigger value={Tab.GIS}>GIS</TabsTrigger>
           </TabsList>
         </Tabs>
